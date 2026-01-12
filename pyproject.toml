@@ -1,0 +1,13 @@
+[project]
+name = "skin"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["oxapy>=0.7.9", "skin-ai"]
+
+[tool.uv.workspace]
+members = ["skin-ai", "api"]
+
+[tool.uv.sources]
+skin-ai = { workspace = true }
