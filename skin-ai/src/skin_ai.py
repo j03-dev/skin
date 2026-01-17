@@ -8,7 +8,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from typing import Any
 
 CONFIG = {
-    "dataset_dir": "../../assets/datasets",
+    "dataset_dir": "assets/datasets",
     "img_size": (224, 224),
     "batch_size": 32,
     "seed": 42,
@@ -17,7 +17,7 @@ CONFIG = {
     "lr_head": 1e-4,
     "lr_fine": 1e-5,
     "unfreez_layers": 30,
-    "model_path": "../../assetes/models/mpox_model.h5",
+    "model_path": "assets/models/mpox_model.h5",
 }
 
 CLASSES = []
@@ -47,22 +47,20 @@ def build_augmentation():
     )
 
 
-def build_backbone(name: str, input_shape: Any):
+def build_backbone(name: str, input_shape):
     backbones = {
-        "efficientnet": {
-            tf.keras.applications.EfficientNedBO,
-            tf.keras.applications.efficientnet.preprocess_input,
-        },
-        "mobilenet": {
-            tf.keras.applications.MobileNetV3Small,
-            tf.keras.applications.mobilenet_v3_preprocess_input,
-        },
+        "efficientnet": tf.keras.applications.EfficientNetB0,
+        "mobilenet": tf.keras.applications.MobileNetV3Small,
     }
 
-    model_cls, preprocess = backbones[name]
-    backbone = model_cls(include_top=False, weights="imagenet", input_shape=input_shape)
+    model_cls = backbones[name]
+    backbone = model_cls(
+        include_top=False,
+        weights="imagenet",
+        input_shape=input_shape,
+    )
 
-    return backbone, preprocess
+    return backbone
 
 
 def build_classifier(x):
@@ -73,28 +71,26 @@ def build_classifier(x):
     return layers.Dense(1, activation="sigmoid")(x)
 
 
-def build_model(backnone_name: str, img_size: tuple[int, int]):
+def build_model(backbone_name: str, img_size: tuple[int, int]):
     inputs = layers.Input(shape=(*img_size, 3))
 
     augmentation = build_augmentation()
-    backbone, preprocess = build_backbone(backnone_name, (*img_size, 3))
-
-    backbone.trainalble = False
+    backbone = build_backbone(backbone_name, (*img_size, 3))
+    backbone.trainable = False
 
     x = augmentation(inputs)
-    x = preprocess(x)
     x = backbone(x, training=False)
     outputs = build_classifier(x)
 
-    return models.Model(input, outputs), backbone
+    return models.Model(inputs, outputs), backbone
 
 
-def compile_model(model: models.Model, lr: Any):
-    model.comiple(
-        optimizer=Adam(lr),
+def compile_model(model: models.Model, lr: float):
+    model.compile(
+        optimizer=Adam(learning_rate=lr),
         loss="binary_crossentropy",
         metrics=[
-            "accuarcy",
+            "accuracy",
             tf.keras.metrics.AUC(name="auc"),
             tf.keras.metrics.Recall(name="recall"),
         ],
@@ -120,33 +116,33 @@ def train_head(
     )
 
 
-def fine_tune(
-    model: models.Model,
-    backbone: Any,
-    train_ds: list[Any] | Any,
-    val_ds: list[Any] | Any,
-    cfg: dict,
-):
+def fine_tune(model, backbone, train_ds, val_ds, cfg):
     backbone.trainable = True
 
-    for layer in backbone.layers[: -cfg["unfreeze_layers"]]:
+    for layer in backbone.layers[: -cfg["unfreez_layers"]]:
         layer.trainable = False
 
     compile_model(model, cfg["lr_fine"])
+
     return model.fit(
         train_ds,
-        validatation_data=val_ds,
+        validation_data=val_ds,
         epochs=cfg["epochs_fine"],
-        callaback=build_callbacks(cfg),
+        callbacks=build_callbacks(cfg),
     )
 
 
 def build_pipeline(cfg: dict):
-    dataset_dir = cfg.pop("dataset_dir")
-    train_ds = prepare_dataset(load_dataset(dataset_dir + "/train", **cfg))
-    val_ds = prepare_dataset(load_dataset(dataset_dir + "/val", **cfg))
+    dataset_dir = cfg["dataset_dir"]
+    data_cfg = {
+        "img_size": cfg["img_size"],
+        "seed": cfg["seed"],
+        "batch_size": cfg["batch_size"],
+    }
+    train_ds = prepare_dataset(load_dataset(dataset_dir + "/Train", **data_cfg))
+    val_ds = prepare_dataset(load_dataset(dataset_dir + "/Val", **data_cfg))
     test_ds = prepare_dataset(
-        load_dataset(cdataset_dir + "/test", **cfg, shuffle=False)
+        load_dataset(dataset_dir + "/Test", **data_cfg, shuffle=False)
     )
 
     model, backbone = build_model("efficientnet", cfg["img_size"])
@@ -164,10 +160,13 @@ def load_model_from(path: str) -> models.Model:
 
 
 def predict(model: models.Model, path_image: str) -> str:
-    x = cv2.imread(path_image)
-    prediction = model.predict(x)
-    class_key = numpy.argmax(prediction, axis=1)[0]
-    return CLASSES[class_key]
+    img = cv2.imread(path_image)
+    img = cv2.resize(img, CONFIG["img_size"])
+    img = img / 255.0
+    img = numpy.expand_dims(img, axis=0)
+
+    prob = model.predict(img)[0][0]
+    return CLASSES[int(prob > 0.5)]
 
 
 def main():
