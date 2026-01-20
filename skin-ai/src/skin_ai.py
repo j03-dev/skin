@@ -1,12 +1,14 @@
-import numpy
+import numpy as np
 import cv2
 import tensorflow as tf
 from tensorflow.keras import layers, models
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from sklearn.utils.class_weight import compute_class_weight
 
-from typing import Any
-
+# =========================
+# CONFIG
+# =========================
 CONFIG = {
     "dataset_dir": "assets/datasets",
     "img_size": (224, 224),
@@ -16,25 +18,41 @@ CONFIG = {
     "epochs_fine": 10,
     "lr_head": 1e-4,
     "lr_fine": 1e-5,
-    "unfreez_layers": 30,
-    "model_path": "assets/models/mpox_model.h5",
+    "unfreeze_layers": 30,
+    "model_path": "assets/models/mpox_model-v2.h5",
+    "threshold": 0.3,  # medical-sensitive threshold
 }
 
-CLASSES = []
+CLASSES = ["Monkeypox", "Others"]
 
 
+# =========================
+# DATA
+# =========================
 def load_dataset(
-    path: str, img_size: tuple[int, int], batch_size: int, seed: int, shuffle=True
+    path: str,
+    img_size: tuple[int, int],
+    batch_size: int,
+    seed: int,
+    shuffle: bool = True,
 ):
     return tf.keras.utils.image_dataset_from_directory(
-        path, image_size=img_size, batch_size=batch_size, seed=seed, shuffle=shuffle
+        path,
+        image_size=img_size,
+        batch_size=batch_size,
+        seed=seed,
+        shuffle=shuffle,
+        label_mode="binary",
     )
 
 
-def prepare_dataset(ds: list[Any] | Any):
+def prepare_dataset(ds):
     return ds.prefetch(tf.data.AUTOTUNE)
 
 
+# =========================
+# MODEL
+# =========================
 def build_augmentation():
     return tf.keras.Sequential(
         [
@@ -43,7 +61,7 @@ def build_augmentation():
             layers.RandomZoom(0.1),
             layers.RandomContrast(0.1),
         ],
-        name="data_augmentation",
+        name="augmentation",
     )
 
 
@@ -53,13 +71,11 @@ def build_backbone(name: str, input_shape):
         "mobilenet": tf.keras.applications.MobileNetV3Small,
     }
 
-    model_cls = backbones[name]
-    backbone = model_cls(
+    backbone = backbones[name](
         include_top=False,
         weights="imagenet",
         input_shape=input_shape,
     )
-
     return backbone
 
 
@@ -71,20 +87,25 @@ def build_classifier(x):
     return layers.Dense(1, activation="sigmoid")(x)
 
 
-def build_model(backbone_name: str, img_size: tuple[int, int]):
+def build_model(backbone_name: str, img_size):
     inputs = layers.Input(shape=(*img_size, 3))
 
-    augmentation = build_augmentation()
+    x = layers.Rescaling(1.0 / 255.0)(inputs)
+    x = build_augmentation()(x)
+
     backbone = build_backbone(backbone_name, (*img_size, 3))
     backbone.trainable = False
 
-    x = augmentation(inputs)
     x = backbone(x, training=False)
     outputs = build_classifier(x)
 
-    return models.Model(inputs, outputs), backbone
+    model = models.Model(inputs, outputs)
+    return model, backbone
 
 
+# =========================
+# TRAINING
+# =========================
 def compile_model(model: models.Model, lr: float):
     model.compile(
         optimizer=Adam(learning_rate=lr),
@@ -104,71 +125,98 @@ def build_callbacks(cfg: dict):
     ]
 
 
-def train_head(
-    model: models.Model, trains_ds: list[Any] | Any, val_ds: list[Any] | Any, cfg: dict
-):
+def compute_class_weights(train_ds):
+    y = np.concatenate([labels.numpy() for _, labels in train_ds])
+    y = y.astype(int).flatten()
+
+    weights = compute_class_weight(
+        class_weight="balanced",
+        classes=np.array([0, 1]),
+        y=y,
+    )
+
+    return dict(enumerate(weights))
+
+
+def train_head(model, train_ds, val_ds, cfg, class_weights):
     compile_model(model, cfg["lr_head"])
     return model.fit(
-        trains_ds,
+        train_ds,
         validation_data=val_ds,
         epochs=cfg["epochs_head"],
         callbacks=build_callbacks(cfg),
+        class_weight=class_weights,
     )
 
 
-def fine_tune(model, backbone, train_ds, val_ds, cfg):
+def fine_tune(model, backbone, train_ds, val_ds, cfg, class_weights):
     backbone.trainable = True
 
-    for layer in backbone.layers[: -cfg["unfreez_layers"]]:
+    for layer in backbone.layers[: -cfg["unfreeze_layers"]]:
         layer.trainable = False
 
     compile_model(model, cfg["lr_fine"])
-
     return model.fit(
         train_ds,
         validation_data=val_ds,
         epochs=cfg["epochs_fine"],
         callbacks=build_callbacks(cfg),
+        class_weight=class_weights,
     )
 
 
+# =========================
+# PIPELINE
+# =========================
 def build_pipeline(cfg: dict):
-    dataset_dir = cfg["dataset_dir"]
+    base = cfg["dataset_dir"]
     data_cfg = {
         "img_size": cfg["img_size"],
         "seed": cfg["seed"],
         "batch_size": cfg["batch_size"],
     }
-    train_ds = prepare_dataset(load_dataset(dataset_dir + "/Train", **data_cfg))
-    val_ds = prepare_dataset(load_dataset(dataset_dir + "/Val", **data_cfg))
-    test_ds = prepare_dataset(
-        load_dataset(dataset_dir + "/Test", **data_cfg, shuffle=False)
-    )
+
+    train_raw = load_dataset(base + "/Train", **data_cfg)
+    train_ds = prepare_dataset(train_raw)
+    val_ds = prepare_dataset(load_dataset(base + "/Val", **data_cfg))
+    test_ds = prepare_dataset(load_dataset(base + "/Test", **data_cfg, shuffle=False))
+
+    print("Class order:", train_raw.class_names)
 
     model, backbone = build_model("efficientnet", cfg["img_size"])
-
     model.summary()
 
-    train_head(model, train_ds, val_ds, cfg)
-    fine_tune(model, backbone, train_ds, val_ds, cfg)
+    class_weights = compute_class_weights(train_ds)
+
+    train_head(model, train_ds, val_ds, cfg, class_weights)
+    fine_tune(model, backbone, train_ds, val_ds, cfg, class_weights)
 
     model.evaluate(test_ds)
+    model.save(cfg["model_path"])
 
 
+# =========================
+# INFERENCE
+# =========================
 def load_model_from(path: str) -> models.Model:
-    models.load_model(path)
+    return models.load_model(path)
 
 
-def predict(model: models.Model, path_image: str) -> str:
-    img = cv2.imread(path_image)
+def predict(model: models.Model, image_path: str) -> str:
+    img = cv2.imread(image_path)
     img = cv2.resize(img, CONFIG["img_size"])
-    img = img / 255.0
-    img = numpy.expand_dims(img, axis=0)
+    img = np.expand_dims(img, axis=0)
 
-    prob = model.predict(img)[0][0]
-    return CLASSES[int(prob > 0.5)]
+    prob = model.predict(img, verbose=0)[0][0]
+    label = int(prob > CONFIG["threshold"])
+
+    print(f"Probability Others: {prob:.3f}")
+    return CLASSES[label]
 
 
+# =========================
+# MAIN
+# =========================
 def main():
     build_pipeline(CONFIG)
 
