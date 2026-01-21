@@ -30,6 +30,12 @@ wheels = [
 name = "api"
 version = "0.1.0"
 source = { virtual = "api" }
+dependencies = [
+    { name = "oxapy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "oxapy", specifier = ">=0.8.0" }]
 
 [[package]]
 name = "astunparse"
@@ -832,25 +838,18 @@ name = "skin"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "keras" },
-    { name = "oxapy" },
     { name = "skin-ai" },
-    { name = "tensorflow" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "keras", specifier = ">=3.13.0" },
-    { name = "oxapy", specifier = ">=0.8.0" },
-    { name = "skin-ai", editable = "skin-ai" },
-    { name = "tensorflow", specifier = ">=2.20.0" },
-]
+requires-dist = [{ name = "skin-ai", editable = "skin-ai" }]
 
 [[package]]
 name = "skin-ai"
 version = "0.1.0"
 source = { editable = "skin-ai" }
 dependencies = [
+    { name = "keras" },
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "tensorflow" },
@@ -858,6 +857,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "keras", specifier = ">=3.13.0" },
     { name = "numpy", specifier = ">=2.4.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "tensorflow", specifier = ">=2.20.0" },

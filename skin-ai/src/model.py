@@ -1,4 +1,3 @@
-import tensorflow as tf
 import keras
 from keras import layers
 
@@ -13,7 +12,6 @@ cfg = {
     "datasets_dir": "assets/datasets",
     "log_dir": ".",
     "model_name": "assets/models/mpox_model-v3.h5",
-    "model_format": "h5",
 }
 
 
@@ -50,8 +48,8 @@ def model_layers():
 
 
 def train():
-    layers = model_layers()
-    layers.compile(
+    model = model_layers()
+    model.compile(
         optimizer=cfg["optimizer"],
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=["accuracy"],
@@ -66,14 +64,14 @@ def train():
     training_data = load_dataset(f"{datasets_dir}/Train")
     validation_data = load_dataset(f"{datasets_dir}/Val")
 
-    layers.fit(
+    model.fit(
         training_data,
         validation_data=validation_data,
         epochs=cfg["epochs"],
         callbacks=[tensorboard_callback],
     )
-    layers.summary()
-    layers.save(cfg["model_name"], save_format=["model_format"])
+    model.summary()
+    model.save(cfg["model_name"])
 
 
 if __name__ == "__main__":
