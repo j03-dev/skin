@@ -32,7 +32,7 @@ def load_dataset(
     )
 
 
-def model_layer():
+def model_layers():
     return keras.Sequential(
         [
             layers.Rescaling(cfg["rescaling"]),
@@ -52,7 +52,7 @@ def model_layer():
 
 
 def train():
-    layers = model_layer()
+    layers = model_layers()
     layers.compile(
         optimizer=cfg["optimizer"],
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),

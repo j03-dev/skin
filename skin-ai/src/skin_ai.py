@@ -8,7 +8,7 @@ classes = ["mpox", "others"]
 
 
 def resize_image(img: np.ndarray):
-    img_size: float[int] = cfg["image_size"]
+    img_size: float[int, int] = cfg["image_size"]
     img = cv2.resize(img, img_size)  # type: ignore
     img = np.expand_dims(img, axis=0)
     return img
