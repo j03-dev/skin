@@ -1,9 +1,7 @@
 from oxapy import HttpServer, Router, Request, post
-from model import load_model
 import skin_ai
 
-
-MODEL = load_model(path="assets/models/mpox_model-v3.h5")
+MODEL = skin_ai.load_model(path="assets/models/mpox_model-v3.h5")
 
 
 @post("/predict")
