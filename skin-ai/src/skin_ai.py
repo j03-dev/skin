@@ -84,8 +84,9 @@ def resize_image(img: np.ndarray):
     return img
 
 
-def predict(model: keras.Model, image_path: str) -> tuple[str, float]:
-    img = cv2.imread(image_path)
+def predict(model: keras.Model, image_bytes: bytes) -> tuple[str, float]:
+    np_array = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
     resized_img = resize_image(img)
     prediction = model.predict(resized_img)
     class_index = np.argmax(prediction, axis=1)[0]

@@ -8,9 +8,7 @@ MODEL = skin_ai.load_model(path="assets/models/mpox_model-v3.h5")
 def predict(r: Request):
     image = r.files.get("image")
     assert image, "The image is none, pls upload image"
-    path = f"./media/{image.name}"
-    image.save(path)
-    label, confidence = skin_ai.predict(MODEL, path)
+    label, confidence = skin_ai.predict(MODEL, image.content())
     return {"label": label, "confidence": confidence}
 
 
