@@ -12,8 +12,8 @@ def predict(r: Request):
     assert image, "the image is none, pls upload image"
     path = f"./media/{image.name}"
     image.save(path)
-    prediction = skin_ai.predict(MODEL, path)
-    return {"prediction": prediction}
+    label, confidence = skin_ai.predict(MODEL, path)
+    return {"label": label, "confidence": str(confidence)}
 
 
 def main():

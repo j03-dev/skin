@@ -14,9 +14,11 @@ def resize_image(img: np.ndarray):
     return img
 
 
-def predict(model: Model, image_path: str) -> str:
+def predict(model: Model, image_path: str) -> tuple[str, float]:
     img = cv2.imread(image_path)
     resized_img = resize_image(img)
-    predict_x = model.predict(resized_img)
-    classes_x = np.argmax(predict_x, axis=1)[0]
-    return classes[classes_x]
+    prediction = model.predict(resized_img)
+    class_index = np.argmax(prediction, axis=1)[0]
+
+    confidence = float(prediction[0][class_index])
+    return classes[class_index], confidence
