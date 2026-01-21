@@ -5,9 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "keras>=3.13.0",
     "oxapy>=0.7.9",
-    "scikit-learn>=1.8.0",
     "skin-ai",
+    "tensorflow>=2.20.0",
 ]
 
 [tool.uv.workspace]

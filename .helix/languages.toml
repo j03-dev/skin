@@ -1,5 +1,5 @@
 [[language]]
 name = "python"
 formatter = { command = "ruff", args = ["format", "-"] }
-language-servers = ["pyrefly"]
+language-servers = ["ty"]
 auto-format = true
