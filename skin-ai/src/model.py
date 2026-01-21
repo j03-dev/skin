@@ -13,7 +13,7 @@ cfg = {
     "datasets_dir": "assets/datasets",
     "log_dir": ".",
     "model_name": "assets/models/mpox_model-v3.h5",
-    "mode_format": "h5",
+    "model_format": "h5",
 }
 
 
@@ -21,9 +21,7 @@ def load_model(path: str):
     return keras.models.load_model(path)
 
 
-def load_dataset(
-    path: str,
-):
+def load_dataset(path: str):
     return keras.utils.image_dataset_from_directory(
         path,
         seed=cfg["seed"],
