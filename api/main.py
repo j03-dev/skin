@@ -11,7 +11,7 @@ def predict(r: Request):
     path = f"./media/{image.name}"
     image.save(path)
     label, confidence = skin_ai.predict(MODEL, path)
-    return {"label": label, "confidence": str(confidence)}
+    return {"label": label, "confidence": confidence}
 
 
 def main():
