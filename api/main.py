@@ -9,7 +9,7 @@ MODEL = load_model(path="assets/models/mpox_model-v3.h5")
 @post("/predict")
 def predict(r: Request):
     image = r.files.get("image")
-    assert image, "the image is none, pls upload image"
+    assert image, "The image is none, pls upload image"
     path = f"./media/{image.name}"
     image.save(path)
     label, confidence = skin_ai.predict(MODEL, path)
