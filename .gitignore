@@ -12,3 +12,4 @@ assets
 media
 validation
 train
+.env

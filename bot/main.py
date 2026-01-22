@@ -1,7 +1,12 @@
 import os
+import io
 import requests
 import skin_ai
+import dotenv
 from oxapy import HttpServer, Request, Response, Router, Status, exceptions, get, post
+
+
+dotenv.load_dotenv()
 
 MODEL = skin_ai.load_model(path="assets/models/mpox_model-v3.h5")
 
@@ -24,7 +29,10 @@ def webhook_verify(r: Request):
 def predict(image_url: str):
     response = requests.get(image_url)
     response.raise_for_status()
-    return skin_ai.predict(MODEL, response.content)
+    file = {"image": ("image.jpg", io.BytesIO(response.content), "image/jpeg")}
+    response = requests.post("http://locahost:8000/api/v1/predict", files=file)
+    response.raise_for_status()
+    return response.json()
 
 
 def send_text(psid: str, text: str):
@@ -41,8 +49,11 @@ def webhook_core(r: Request):
     messaging = data["entry"][0]["messaging"][0]
     sender = messaging["sender"]["id"]
     image_url = messaging["message"]["attachements"][0]["playload"]["url"]
-    label, confidence = predict(image_url)
-    send_text(sender, f"{label=} {confidence=}")
+    prediction = predict(image_url)
+    send_text(
+        sender,
+        f"label={prediction['label']} prediction={prediction['confidence']}",
+    )
     return Status.OK
 
 
