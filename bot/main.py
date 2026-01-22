@@ -54,7 +54,7 @@ def webhook_core(r: Request):
         prediction = predict(image_url)
         send_text(
             sender,
-            f"label={prediction['label']} prediction={prediction['confidence']}",
+            f"label={prediction['label']} confidence={prediction['confidence']}",
         )
     return Status.OK
 
